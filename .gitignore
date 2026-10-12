@@ -1,4 +1,35 @@
+<<<<<<< HEAD
 # https://dart.dev/tools/private-files
 # Created by `dart pub`
 .dart_tool/
 .idea/
+=======
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock.bak
+
+# Среды разработки
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Системные
+.DS_Store
+Thumbs.db
+
+# Сборки
+*.apk
+*.aab
+*.ipa
+
+# Локальные настройки Android
+**/android/local.properties
+**/android/key.properties
+**/android/**/*.keystore
+**/android/**/*.jks
+>>>>>>> f7974698da47c93e537eaaa04afb19f5c2005aba
