@@ -2,16 +2,15 @@ import 'dart:io';
 import 'dart:convert';
 
 void main() {
-
   print("bookshelf_console");
   print("${Platform.version}");
   print("${Platform.operatingSystem}");
 
   String title = '';
-  while(title.isEmpty){
+  while (title.isEmpty) {
     stdout.write("Название: ");
     title = stdin.readLineSync(encoding: utf8) ?? '';
-    if(title.isEmpty){
+    if (title.isEmpty) {
       print("Название не должно быть пустым");
     }
   }
@@ -27,13 +26,12 @@ void main() {
   final int pages = int.tryParse(stdin.readLineSync() ?? '') ?? 0;
 
   double rating = -1.0;
-  while(rating < 0.0 || rating > 5.0){
+  while (rating < 0.0 || rating > 5.0) {
     stdout.write("Оценка (0 - 5): ");
     final double? ParsedRating = double.tryParse(stdin.readLineSync() ?? '');
-    if (ParsedRating == null || ParsedRating < 0.0 || ParsedRating > 5.0){
+    if (ParsedRating == null || ParsedRating < 0.0 || ParsedRating > 5.0) {
       print("Оценка должна быть от 0 до 5");
-    }
-    else{
+    } else {
       rating = ParsedRating;
     }
   }
@@ -41,23 +39,21 @@ void main() {
   stdout.write("Прочитана: ");
   String isRead = (stdin.readLineSync(encoding: utf8) ?? '');
 
-  stdout.write ('');
-  stdout.write ("=" * 44);
-  stdout.write ("\n <$title>");
-  stdout.write ("\n Автор: $author");
-  stdout.write ("\n Год: $year");
-  stdout.write ("\n Кол-во страниц: $pages");
-  stdout.write ("\n Прочитана: $isRead\n");
-  stdout.write ("=" * 44);
+  stdout.write('');
+  stdout.write("=" * 44);
+  stdout.write("\n <$title>");
+  stdout.write("\n Автор: $author");
+  stdout.write("\n Год: $year");
+  stdout.write("\n Кол-во страниц: $pages");
+  stdout.write("\n Прочитана: $isRead\n");
+  stdout.write("=" * 44);
 
   String category;
-  if (pages < 150){
+  if (pages < 150) {
     category = "брошюра";
-  }
-  else if (pages < 400){
+  } else if (pages < 400) {
     category = "книга";
-  }
-  else{
+  } else {
     category = "том";
   }
 
@@ -109,7 +105,7 @@ void main() {
     "Ведьмак: Последнее желание": 318,
   };
 
-  pages_book.forEach((String book, int bookpages){
+  pages_book.forEach((String book, int bookpages) {
     print(" $book - $bookpages");
   });
 
@@ -140,9 +136,9 @@ void main() {
   print("Список all: $all");
   print("");
 
-  print('7 / 2 = ${7 / 2}');   // вещественное деление
+  print('7 / 2 = ${7 / 2}'); // вещественное деление
   print('7 ~/ 2 = ${7 ~/ 2}'); // целочисленное деление
-  print('7 % 2 = ${7 % 2}');   // остаток от деления
+  print('7 % 2 = ${7 % 2}'); // остаток от деления
 
   bool sideEffect() {
     print("sideEffect вызван");
@@ -173,13 +169,12 @@ void main() {
   // Каскадный оператор ..
   final StringBuffer buffer = StringBuffer();
   buffer
-  ..write("Book")
-  ..write("Shelf")
-  ..write(" — ")
-  ..write("каталог книг");
+    ..write("Book")
+    ..write("Shelf")
+    ..write(" — ")
+    ..write("каталог книг");
   print("Каскад: ${buffer.toString()}");
   print("");
-
 }
 
 String makeInitials(String fullName) {
