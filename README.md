@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+A sample command-line application with an entrypoint in `bin/`, library code
+in `lib/`, and example unit test in `test/`.
+=======
 # BookShelf — проект курса «Разработка ПО для мобильных платформ»
 
 Это ваш личный репозиторий на весь семестр. В нём постепенно вырастает
@@ -150,3 +154,4 @@ flutter run -t lib/starters/lab09_starter.dart
 
 > PR к ЛР №6 будет очень большим, на две сотни файлов. Это нормально:
 > `flutter create` генерирует каркасы для Android и iOS. Пугаться не нужно.
+>>>>>>> f7974698da47c93e537eaaa04afb19f5c2005aba
