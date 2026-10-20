@@ -3,8 +3,8 @@ import 'dart:convert';
 
 void main() {
   print("bookshelf_console");
-  print("${Platform.version}");
-  print("${Platform.operatingSystem}");
+  print(Platform.version);
+  print(Platform.operatingSystem);
 
   String title = '';
   while (title.isEmpty) {
@@ -28,11 +28,11 @@ void main() {
   double rating = -1.0;
   while (rating < 0.0 || rating > 5.0) {
     stdout.write("Оценка (0 - 5): ");
-    final double? ParsedRating = double.tryParse(stdin.readLineSync() ?? '');
-    if (ParsedRating == null || ParsedRating < 0.0 || ParsedRating > 5.0) {
+    final double? parsedRating = double.tryParse(stdin.readLineSync() ?? '');
+    if (parsedRating == null || parsedRating < 0.0 || parsedRating > 5.0) {
       print("Оценка должна быть от 0 до 5");
     } else {
-      rating = ParsedRating;
+      rating = parsedRating;
     }
   }
 
@@ -57,13 +57,13 @@ void main() {
     category = "том";
   }
 
-  double reading_time = pages / 50;
-  int current_year = DateTime.now().year;
-  int age = current_year - year;
+  double readingTime = pages / 50;
+  int currentYear = DateTime.now().year;
+  int age = currentYear - year;
   String initials = makeInitials(author);
 
   print("\nКатегория: $category");
-  print("Примерное время чтения: $reading_time");
+  print("Примерное время чтения: $readingTime");
   print("Возраст издания: $age");
   print("Инициалы автора: $initials");
 
@@ -97,7 +97,7 @@ void main() {
   stdout.write('Жанры: $genres\n');
   stdout.write('Уникальных жанров: ${genres.length}\n');
 
-  Map<String, int> pages_book = <String, int>{
+  Map<String, int> pagesBook = <String, int>{
     "Пикник на обочине": 192,
     "Понедельник начинается в субботу": 320,
     "Этюд в багровых тонах": 224,
@@ -105,7 +105,7 @@ void main() {
     "Ведьмак: Последнее желание": 318,
   };
 
-  pages_book.forEach((String book, int bookpages) {
+  pagesBook.forEach((String book, int bookpages) {
     print(" $book - $bookpages");
   });
 
@@ -113,7 +113,7 @@ void main() {
   int maxPages = 0;
   int totalPages = 0;
 
-  for (MapEntry<String, int> entry in pages_book.entries) {
+  for (MapEntry<String, int> entry in pagesBook.entries) {
     totalPages += entry.value;
     if (entry.value > maxPages) {
       maxPages = entry.value;
@@ -121,11 +121,11 @@ void main() {
     }
   }
 
-  double avg_pages = totalPages / pages_book.length;
+  double avgPages = totalPages / pagesBook.length;
 
   stdout.write("Максимальным числом страниц: $maxBook ($maxPages)\n");
   stdout.write("Суммарно страниц: $totalPages\n");
-  stdout.write("Среднее количество страниц: ${avg_pages.toStringAsFixed(1)}\n");
+  stdout.write("Среднее количество страниц: ${avgPages.toStringAsFixed(1)}\n");
 
   List<String> all = <String>[
     ...shelf,
@@ -150,7 +150,8 @@ void main() {
   print("Ленивое ||: ${(alwaysFalse() == false) || sideEffect()}");
 
   // ?., ??, ??=
-  String? maybeName;
+  stdout.write("Название для проверки null (Enter — пусто): ");
+  String? maybeName = stdin.readLineSync(encoding: utf8);
   print("?. для null: ${maybeName?.length}");
   print("?? для null: ${maybeName ?? "имя не задано"}");
   maybeName ??= "BookShelf";
