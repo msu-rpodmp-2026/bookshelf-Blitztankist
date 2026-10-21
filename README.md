@@ -150,3 +150,4 @@ flutter run -t lib/starters/lab09_starter.dart
 
 > PR к ЛР №6 будет очень большим, на две сотни файлов. Это нормально:
 > `flutter create` генерирует каркасы для Android и iOS. Пугаться не нужно.
+
