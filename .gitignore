@@ -1,9 +1,5 @@
-<<<<<<< HEAD
 # https://dart.dev/tools/private-files
 # Created by `dart pub`
-.dart_tool/
-.idea/
-=======
 # Dart / Flutter
 .dart_tool/
 .packages
@@ -32,4 +28,3 @@ Thumbs.db
 **/android/key.properties
 **/android/**/*.keystore
 **/android/**/*.jks
->>>>>>> f7974698da47c93e537eaaa04afb19f5c2005aba
