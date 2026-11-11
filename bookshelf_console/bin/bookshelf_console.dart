@@ -28,7 +28,20 @@ abstract interface class Exportable {
   Map<String, dynamic> toJson();
 }
 //основные классы
-class Book extends LibraryItem with Rateable{
+class Book extends LibraryItem with Rateable implements Searchable, Exportable,
+Comparable<Book>{
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'author': author,
+    'year': year,
+    'pages': pages,
+    'genres': genres.toList(),
+    'status': status.name,
+    'rating': _rating,
+  };
+
   @override
   final String title;
   final String author;
@@ -67,7 +80,7 @@ class Book extends LibraryItem with Rateable{
 
   @override
   String describe(){
-    final ratingStr = isRated ? _rating.toStringAsFixed(1) : 'нет';
+    final ratingStr = isRated ? _rating!.toStringAsFixed(1) : 'нет';
     return '«$title» — $author ($year г., $pages стр., статус: '
         '${status.label}, оценка: $ratingStr)';
   }
