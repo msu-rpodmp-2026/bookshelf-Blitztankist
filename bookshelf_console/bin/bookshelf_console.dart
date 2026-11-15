@@ -325,7 +325,7 @@ void main() {
 
 void printMenu() {
   print('\n${'=' * 44}');
-  print(' BookShelf — каталог книг (ООП)');
+  print(' BookShelf — каталог книг');
   print('=' * 44);
   print(' 1 Показать весь каталог');
   print(' 2 Поиск (по названию, автору, жанру)');
@@ -334,7 +334,7 @@ void printMenu() {
   print(' 5 Статистика каталога');
   print(' 6 Добавить книгу');
   print(' 7 Удалить книгу по номеру');
-  print(' 8 Демонстрация ==, hashCode, Set (Задание 6)');
+  print(' 8 Демонстрация ==, hashCode, Set');
   print(' 0 Выход');
   print('=' * 44);
 }
