@@ -1,418 +1,401 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
-typedef Book = Map<String, Object?>;
-typedef BookPredicate = bool Function(Book book);
+import 'package:bookshelf_console/models/models.dart';
 
-final List<Book> library = [
-  {
-    'title': 'Этюд в багровых тонах',
-    'author': 'А. К. Дойл',
-    'year': 2017,
-    'pages': 448,
-    'genre': 'детектив',
-    'read': true,
-  },
-  {
-    'title': 'На западном фронте без перемен',
-    'author': 'Э. М. Ремарк',
-    'year': 2023,
-    'pages': 256,
-    'genre': 'роман',
-    'read': false,
-  },
-  {
-    'title': 'Преступление и наказание',
-    'author': 'Ф. М. Достоевский',
-    'year': 2019,
-    'pages': 608,
-    'genre': 'роман',
-    'read': true,
-  },
-  {
-    'title': 'Японские мифы: от кицунэ и ёкаев до "звонка" и "наруто"',
-    'author': 'Д. Фридман',
-    'year': 2022,
-    'pages': 272,
-    'genre': 'Научно-популярная литература',
-    'read': true,
-  },
-  {
-    'title': 'Мастер и Маргарита',
-    'author': 'М. А. Булгаков',
-    'year': 2012,
-    'pages': 480,
-    'genre': 'роман',
-    'read': false,
-  },
-  {
-    'title': 'Крещение огнем',
-    'author': 'А. Сапковский',
-    'year': 2025,
-    'pages': 384,
-    'genre': 'фэнтези',
-    'read': true,
-  },
-  {
-    'title': 'Трудно быть богом',
-    'author': 'А. и Б. Стругацкие',
-    'year': 2019,
-    'pages': 256,
-    'genre': 'фантастика',
-    'read': true,
-  },
-  {
-    'title': 'Галлюцинации',
-    'author': 'Оливер Сакс',
-    'year': 2026,
-    'pages': 416,
-    'genre': 'Научно-популярная литература',
-    'read': true,
-  },
-];
-void printMenu() {
-  print('');
-  print('=' * 44);
-  print('Bookshelf - каталог книг');
-  print('=' * 44);
-  print(' 1. Показать весь каталог');
-  print(' 2. Поиск по автору');
-  print(' 3. Поиск по названию');
-  print(' 4. Фильтр по жанру');
-  print(' 5. Фильтр по признаку «прочитана»');
-  print(' 6. Сортировка (название, автор, год, объём)');
-  print(' 7. Статистика каталога');
-  print(' 8. Добавить книгу');
-  print(' 9. Удалить книгу по номеру');
-  print('10. Демонстрация функций высшего порядка');
-  print(' 0. Выход');
-  print('=' * 44);
-}
+String? _readLine() => stdin.readLineSync(encoding: utf8)?.trim();
 
-void printAll(List<Book> books, {String emptyMessage = 'Ничего не найдено.'}) {
-  if (books.isEmpty) {
-    print(emptyMessage);
-    return;
-  }
-  for (int i = 0; i < books.length; i++) {
-    final Book b = books[i];
-    final String mark = (b['read'] as bool) ? '[+]' : '[ ]';
+void _aborted() => print('Ввод прерван — действие отменено.');
+
+int? _askInt(String prompt, {int min = 0, int? max}) {
+  while (true) {
+    stdout.write('$prompt: ');
+    final line = _readLine();
+    if (line == null) return null;
+    final value = int.tryParse(line);
+    if (value != null && value >= min && (max == null || value <= max)) {
+      return value;
+    }
     print(
-      '${(i + 1).toString().padLeft(2)}. $mark'
-      '"${b['title']}" - ${b['author']}. '
-      '${b['year']} г., ${b['pages']} стр., жанр: ${b['genre']}',
+      'Некорректное значение. Ожидается целое число'
+      '${max == null ? ' не меньше $min' : ' от $min до $max'}.',
     );
   }
 }
 
-List<Book> searchByField(List<Book> books, String field, String query) {
-  final String q = query.trim().toLowerCase();
-  if (q.isEmpty) return <Book>[];
-  return books
-      .where((Book b) => (b[field]?.toString() ?? '').toLowerCase().contains(q))
-      .toList();
-}
-
-List<Book> filterByRead(List<Book> books, bool isRead) {
-  return books.where((Book b) => (b['read'] as bool) == isRead).toList();
-}
-
-List<Book> sortBy(List<Book> books, String field, {bool descending = false}) {
-  final List<Book> copy = <Book>[...books];
-  copy.sort((Book a, Book b) {
-    final Object? va = a[field];
-    final Object? vb = b[field];
-    int cmp;
-    if (va is num && vb is num) {
-      cmp = va.compareTo(vb);
-    } else {
-      cmp = (va?.toString() ?? '').compareTo(vb?.toString() ?? '');
-    }
-    return descending ? -cmp : cmp;
-  });
-  return copy;
-}
-
-void printStatistics(List<Book> books) {
-  if (books.isEmpty) {
-    print('Каталог пуст.');
-    return;
-  }
-  final int total = books.length;
-  final int readCount = books.where((Book b) => b['read'] as bool).length;
-
-  final int totalPages = books.fold<int>(
-    0,
-    (int sum, Book b) => sum + (b['pages'] as int),
-  );
-  final double avgPages = totalPages / total;
-
-  final Book oldest = books.reduce(
-    (Book a, Book b) => (a['year'] as int) < (b['year'] as int) ? a : b,
-  );
-  final Book newest = books.reduce(
-    (Book a, Book b) => (a['year'] as int) > (b['year'] as int) ? a : b,
-  );
-  final Book biggest = books.reduce(
-    (Book a, Book b) => (a['pages'] as int) > (b['pages'] as int) ? a : b,
-  );
-
-  final Set<String> genres = books
-      .map((Book b) => b['genre'] as String)
-      .toSet();
-
-  final Map<String, int> byGenre = books.fold<Map<String, int>>(
-    <String, int>{},
-    (Map<String, int> map, Book b) {
-      final String g = b['genre'] as String;
-      map[g] = (map[g] ?? 0) + 1;
-      return map;
-    },
-  );
-
-  final double readShare = readCount / total * 100;
-  final bool allRead = books.every((Book b) => b['read'] as bool);
-  final bool anyRead = books.any((Book b) => b['read'] as bool);
-
-  print('');
-  print('--- Статистика каталога ---');
-  print('Всего книг: $total');
-  print('Прочитано: $readCount (${readShare.toStringAsFixed(1)} %)');
-  print('Суммарно страниц: $totalPages');
-  print('Средний объём: ${avgPages.toStringAsFixed(1)} стр.');
-  print('Самая старая: «${oldest['title']}» (${oldest['year']})');
-  print('Самая новая: «${newest['title']}» (${newest['year']})');
-  print('Самая объёмная: «${biggest['title']}» (${biggest['pages']} стр.)');
-  print('Жанры: ${genres.join(", ")}');
-  print('Книг по жанрам:');
-  byGenre.forEach((String g, int n) => print('  $g — $n'));
-  print('Все прочитаны: ${allRead ? "да" : "нет"}');
-  print('Есть хотя бы одна прочитанная: ${anyRead ? "да" : "нет"}');
-}
-
-int askInt(String prompt, {int min = 0, int? max}) {
-  int? value;
-  do {
-    stdout.write('$prompt: ');
-    value = int.tryParse((stdin.readLineSync(encoding: utf8) ?? '').trim());
-    if (value == null || value < min || (max != null && value > max)) {
-      print(
-        'Некорректное значение. Ожидается целое число'
-        '${max == null ? "не меньше $min" : "от $min до $max"}.',
-      );
-      value = null;
-    }
-  } while (value == null);
-  return value;
-}
-
-String askString(String prompt, {bool allowEmpty = false}) {
+String? _askString(String prompt, {bool allowEmpty = false}) {
   while (true) {
     stdout.write('$prompt: ');
-    final String v = (stdin.readLineSync(encoding: utf8) ?? '').trim();
-    if (v.isNotEmpty || allowEmpty) return v;
-    print('Пустое значение недопустимо');
+    final line = _readLine();
+    if (line == null) return null;
+    if (line.isNotEmpty || allowEmpty) return line;
+    print('Пустое значение недопустимо.');
   }
 }
 
-bool askBool(String prompt) {
+bool? _askBool(String prompt) {
   while (true) {
     stdout.write('$prompt (да/нет): ');
-    final String a = (stdin.readLineSync(encoding: utf8) ?? '')
-        .trim()
-        .toLowerCase();
-    if (a == 'да' || a == 'yes' || a == 'y') return true;
-    if (a == 'нет' || a == 'no' || a == 'n') return false;
+    final line = _readLine();
+    if (line == null) return null;
+    switch (line.toLowerCase()) {
+      case 'да':
+      case 'yes':
+      case 'y':
+        return true;
+      case 'нет':
+      case 'no':
+      case 'n':
+        return false;
+    }
     print('Введите "да" или "нет".');
   }
 }
 
-void addBook() {
-  print('');
-  print('--- Добавление книги ---');
-  final String title = askString('Название');
-  final String author = askString('Автор');
-  final int year = askInt('Год издания', min: 1, max: 2100);
-  final int pages = askInt('Количество страниц', min: 1);
-  final String genre = askString('Жанр');
-  final bool read = askBool('Прочитана');
-
-  library.add(<String, Object?>{
-    'title': title,
-    'author': author,
-    'year': year,
-    'pages': pages,
-    'genre': genre,
-    'read': read,
-  });
-
-  print('Книга «$title» добавлена.');
-}
-
-void deleteBook() {
-  if (library.isEmpty) {
-    print('Каталог пуст.');
-    return;
-  }
-  printAll(library);
-  final int num = askInt(
-    'Номер книги для удаления',
-    min: 1,
-    max: library.length,
-  );
-  final Book b = library[num - 1];
-
-  if (askBool('Удалить «${b['title']}»')) {
-    library.removeAt(num - 1);
-    print('Удалено.');
-  } else {
-    print('Отменено.');
-  }
-}
-
-void searchByAuthor() {
-  final String q = askString('Подстрока автора', allowEmpty: true);
-  printAll(searchByField(library, 'author', q));
-}
-
-void searchByTitle() {
-  final String q = askString('Подстрока названия', allowEmpty: true);
-  printAll(searchByField(library, 'title', q));
-}
-
-void filterByGenre() {
-  final String g = askString('Жанр', allowEmpty: true);
-  if (g.isEmpty) {
-    print('Жанр не задан');
-    return;
-  }
-  final String q = g.toLowerCase();
-  printAll(
-    library
-        .where((Book b) => (b['genre'] as String).toLowerCase() == q)
-        .toList(),
-  );
-}
-
-void filterByReadMenu() {
-  final bool read = askBool('Показать прочитанные');
-  printAll(filterByRead(library, read));
-}
-
-void sortMenu() {
-  print('\nПоле сортировки:');
-  print(' 1 — по названию');
-  print(' 2 — по автору');
-  print(' 3 — по году');
-  print(' 4 — по объёму (страниц)');
-  stdout.write('> ');
-  final String fieldChoice = (stdin.readLineSync(encoding: utf8) ?? '').trim();
-
-  final String field;
-  switch (fieldChoice) {
-    case '1':
-      field = 'title';
-      break;
-    case '2':
-      field = 'author';
-      break;
-    case '3':
-      field = 'year';
-      break;
-    case '4':
-      field = 'pages';
-      break;
-    default:
-      print('Неизвестное поле.');
-      return;
-  }
-
-  final bool desc = askBool('По убыванию');
-  printAll(sortBy(library, field, descending: desc));
-}
-
-List<Book> filter(List<Book> books, BookPredicate test) {
-  return books.where(test).toList();
-}
-
-Function makeCounter() {
-  int count = 0;
-  return () => ++count;
-}
-
-void demoHigherFunctions() {
-  final thick = filter(library, (Book b) => (b['pages'] as int) > 500);
-  print('\nТолстые книги (>500 стр.):');
-  printAll(thick);
-
-  final modern = filter(library, (Book b) => (b['year'] as int) > 2000);
-  print('\nКниги нового века (год > 2000):');
-  printAll(modern);
-
-  final unreadFunction = filter(
-    library,
-    (Book b) => b['genre'] == 'фэнтези' && !(b['read'] as bool),
-  );
-  print('\nНепрочитанное фэнтези:');
-  printAll(unreadFunction);
-}
-
 void main() {
-  final Function counter = makeCounter();
-  int executed = 0;
-  bool running = true;
+  stdout.encoding = utf8;
+  final Library<Book> library = Library<Book>();
+  _seedData(library);
 
+  bool running = true;
   while (running) {
     printMenu();
     stdout.write('> ');
-    final command = stdin.readLineSync()?.trim();
-    switch (command) {
+    final String? line = _readLine();
+
+    if (line == null) {
+      print('\nВвод завершён.');
+      break;
+    }
+
+    switch (line) {
       case '1':
-        printAll(library);
-        executed = counter();
+        _printAll(library.items);
         break;
       case '2':
-        searchByAuthor();
-        executed = counter();
+        _searchMenu(library);
         break;
       case '3':
-        searchByTitle();
-        executed = counter();
+        _filterMenu(library);
         break;
       case '4':
-        filterByGenre();
-        executed = counter();
+        _sortMenu(library);
         break;
       case '5':
-        filterByReadMenu();
-        executed = counter();
+        _printStatistics(library);
         break;
       case '6':
-        sortMenu();
-        executed = counter();
+        _addBook(library);
         break;
       case '7':
-        printStatistics(library);
-        executed = counter();
+        _deleteBook(library);
         break;
       case '8':
-        addBook();
-        executed = counter();
-        break;
-      case '9':
-        deleteBook();
-        executed = counter();
-        break;
-      case '10':
-        demoHigherFunctions();
-        executed = counter();
+        _demoSpecialMethods();
         break;
       case '0':
         running = false;
         break;
       default:
-        print('Неизвестная команда. Повторите ввод');
+        print('Неизвестная команда. Повторите ввод.');
     }
   }
-  print('Работа завершена. Выполнено команд: $executed');
+  print('Работа завершена.');
+}
+
+void printMenu() {
+  print('\n${'=' * 44}');
+  print(' BookShelf — каталог книг');
+  print('=' * 44);
+  print(' 1 Показать весь каталог');
+  print(' 2 Поиск (по названию, автору, жанру)');
+  print(' 3 Фильтр (прочитанные, непрочитанные, жанр)');
+  print(' 4 Сортировка (название, автор, год, объём)');
+  print(' 5 Статистика каталога');
+  print(' 6 Добавить книгу');
+  print(' 7 Удалить книгу по номеру');
+  print(' 8 Демонстрация ==, hashCode, Set');
+  print(' 0 Выход');
+  print('=' * 44);
+}
+
+void _seedData(Library<Book> lib) {
+  lib.add(
+    PaperBook(
+      title: 'Этюд в багровых тонах',
+      author: 'А. К. Дойл',
+      shelf: 'A-1',
+      year: 2017,
+      pages: 448,
+      genres: {'детектив'},
+      status: ReadingStatus.finished,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'На западном фронте без перемен',
+      author: 'Э. М. Ремарк',
+      shelf: 'A-2',
+      year: 2023,
+      pages: 256,
+      genres: {'роман'},
+      status: ReadingStatus.planned,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'Преступление и наказание',
+      author: 'Ф. М. Достоевский',
+      shelf: 'A-3',
+      year: 2019,
+      pages: 608,
+      genres: {'роман'},
+      status: ReadingStatus.finished,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'Японские мифы: от кицунэ и ёкаев до "звонка" и "наруто"',
+      author: 'Д. Фридман',
+      shelf: 'B-1',
+      year: 2022,
+      pages: 272,
+      genres: {'Научно-популярная литература'},
+      status: ReadingStatus.finished,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'Мастер и Маргарита',
+      author: 'М. А. Булгаков',
+      shelf: 'A-4',
+      year: 2012,
+      pages: 480,
+      genres: {'роман'},
+      status: ReadingStatus.planned,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'Крещение огнем',
+      author: 'А. Сапковский',
+      shelf: 'B-2',
+      year: 2025,
+      pages: 384,
+      genres: {'фэнтези'},
+      status: ReadingStatus.finished,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'Трудно быть богом',
+      author: 'А. и Б. Стругацкие',
+      shelf: 'B-3',
+      year: 2019,
+      pages: 256,
+      genres: {'фантастика'},
+      status: ReadingStatus.finished,
+    ),
+  );
+  lib.add(
+    PaperBook(
+      title: 'Галлюцинации',
+      author: 'Оливер Сакс',
+      shelf: 'B-4',
+      year: 2026,
+      pages: 416,
+      genres: {'Научно-популярная литература'},
+      status: ReadingStatus.finished,
+    ),
+  );
+}
+
+void _printAll(List<LibraryItem> items) {
+  if (items.isEmpty) {
+    print('Ничего не найдено.');
+    return;
+  }
+  for (int i = 0; i < items.length; i++) {
+    print('${(i + 1).toString().padLeft(2)}. ${items[i].describe()}');
+  }
+}
+
+void _searchMenu(Library<Book> lib) {
+  final q = _askString('Запрос (название, автор или жанр)', allowEmpty: true);
+  if (q == null) return _aborted();
+  _printAll(lib.search(q).toList());
+}
+
+void _filterMenu(Library<Book> lib) {
+  print('1 - Только прочитанные');
+  print('2 - Только непрочитанные');
+  print('3 - По жанру');
+  final choice = _askString('Фильтр', allowEmpty: true);
+  if (choice == null) return _aborted();
+
+  if (choice == '1') {
+    _printAll(lib.where((b) => b.status == ReadingStatus.finished).toList());
+  } else if (choice == '2') {
+    _printAll(lib.where((b) => b.status != ReadingStatus.finished).toList());
+  } else if (choice == '3') {
+    final genre = _askString('Жанр');
+    if (genre == null) return _aborted();
+    final q = genre.toLowerCase();
+    _printAll(
+      lib.where((b) => b.genres.any((g) => g.toLowerCase() == q)).toList(),
+    );
+  } else {
+    print('Неизвестный фильтр.');
+  }
+}
+
+void _sortMenu(Library<Book> lib) {
+  print('Сортировка:');
+  print(' 1 - по названию');
+  print(' 2 - по автору');
+  print(' 3 - по году');
+  print(' 4 - по объёму (страниц)');
+  final field = _askString('Поле', allowEmpty: true);
+  if (field == null) return _aborted();
+
+  final comparators = <String, int Function(Book, Book)>{
+    '1': (a, b) => a.title.compareTo(b.title),
+    '2': (a, b) => a.author.compareTo(b.author),
+    '3': (a, b) => a.year.compareTo(b.year),
+    '4': (a, b) => a.pages.compareTo(b.pages),
+  };
+  final compare = comparators[field];
+  if (compare == null) {
+    print('Неизвестное поле.');
+    return;
+  }
+
+  final desc = _askBool('По убыванию');
+  if (desc == null) return _aborted();
+
+  final sorted = [...lib.items]..sort(desc ? (a, b) => compare(b, a) : compare);
+  _printAll(sorted);
+}
+
+void _printStatistics(Library<Book> lib) {
+  if (lib.count == 0) {
+    print('Каталог пуст.');
+    return;
+  }
+  final totalPages = lib.items.fold<int>(0, (sum, b) => sum + b.pages);
+  final avgPages = totalPages / lib.count;
+  print('\n--- Статистика ---');
+  print('Всего книг: ${lib.count}');
+  print('Средний объём: ${avgPages.toStringAsFixed(1)} стр.');
+  print('Книг по жанрам: ${lib.countByGenre()}');
+}
+
+void _addBook(Library<Book> lib) {
+  print('\n--- Добавление книги ---');
+  print('Тип: 1 - бумажная, 2 - электронная, 3 - аудио');
+  final type = _askInt('Тип', min: 1, max: 3);
+  if (type == null) return _aborted();
+  final title = _askString('Название');
+  if (title == null) return _aborted();
+  final author = _askString('Автор');
+  if (author == null) return _aborted();
+  final year = _askInt('Год издания', min: 1, max: 2100);
+  if (year == null) return _aborted();
+  final pages = _askInt('Количество страниц', min: 1);
+  if (pages == null) return _aborted();
+  final genresInput = _askString('Жанры через запятую');
+  if (genresInput == null) return _aborted();
+  final genres = genresInput
+      .split(',')
+      .map((g) => g.trim())
+      .where((g) => g.isNotEmpty)
+      .toSet();
+  print('Статус: 1 - Запланирована, 2 - Читаю, 3 - Прочитана, 4 - Брошена');
+  final statusNum = _askInt('Статус', min: 1, max: 4);
+  if (statusNum == null) return _aborted();
+  final status = ReadingStatus.values[statusNum - 1];
+
+  try {
+    switch (type) {
+      case 1:
+        final shelf = _askString('Полка');
+        if (shelf == null) return _aborted();
+        lib.add(
+          PaperBook(
+            title: title,
+            author: author,
+            shelf: shelf,
+            year: year,
+            pages: pages,
+            genres: genres,
+            status: status,
+          ),
+        );
+      case 2:
+        final format = _askString('Формат', allowEmpty: true);
+        if (format == null) return _aborted();
+        final sizeMb = _askInt('Размер, МБ', min: 0);
+        if (sizeMb == null) return _aborted();
+        lib.add(
+          EBook(
+            title: title,
+            author: author,
+            format: format.isEmpty ? 'PDF' : format,
+            sizeMb: sizeMb.toDouble(),
+            year: year,
+            pages: pages,
+            genres: genres,
+            status: status,
+          ),
+        );
+      case 3:
+        final narrator = _askString('Читает');
+        if (narrator == null) return _aborted();
+        final hours = _askInt('Длительность, часов', min: 1);
+        if (hours == null) return _aborted();
+        lib.add(
+          AudioBook(
+            title: title,
+            author: author,
+            duration: Duration(hours: hours),
+            narrator: narrator,
+            year: year,
+            pages: pages,
+            genres: genres,
+            status: status,
+          ),
+        );
+    }
+    print('Книга «$title» добавлена.');
+  } catch (e) {
+    print('Ошибка: $e');
+  }
+}
+
+void _deleteBook(Library<Book> lib) {
+  if (lib.count == 0) {
+    print('Каталог пуст.');
+    return;
+  }
+  _printAll(lib.items);
+  final num = _askInt('Номер книги для удаления', min: 1, max: lib.count);
+  if (num == null) return _aborted();
+  final book = lib.items[num - 1];
+  final confirm = _askBool('Удалить «${book.title}»');
+  if (confirm == null) return _aborted();
+  if (confirm) {
+    lib.remove(book);
+    print('Книга «${book.title}» удалена.');
+  } else {
+    print('Отменено.');
+  }
+}
+
+void _demoSpecialMethods() {
+  print('\n--- Демонстрация ==, hashCode и Set ---');
+  final b1 = Book(title: 'Война и мир', author: 'Л. Толстой', year: 1869);
+  final b2 = Book(title: 'Война и мир', author: 'Л. Толстой', year: 1869);
+  print('b1 == b2: ${b1 == b2}');
+  final Set<Book> bookSet = {b1, b2};
+  print('Размер Set с двумя одинаковыми книгами: ${bookSet.length}');
 }
