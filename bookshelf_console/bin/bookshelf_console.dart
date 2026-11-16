@@ -1,279 +1,54 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
-//перечисление
-enum ReadingStatus {
-  planned('Запланирована', 0),
-  reading('Читаю', 1),
-  finished('Прочитана', 2),
-  abandoned('Брошена', 3);
+import 'package:bookshelf_console/models/models.dart';
 
-  final String label;
-  final int order;
-  const ReadingStatus(this.label, this.order);
-  bool get isDone => this == ReadingStatus.finished;
+String? _readLine() => stdin.readLineSync(encoding: utf8)?.trim();
 
-  static ReadingStatus fromName(String name) =>
-      values.firstWhere((s) => s.name == name, orElse: () => planned);
-}
+void _aborted() => print('Ввод прерван — действие отменено.');
 
-//абстрактные классы интерфейса
-abstract class LibraryItem {
-  String get title;
-  String describe();
-  void printCard() => print(describe());
-}
-
-abstract interface class Searchable {
-  bool matches(String query);
-}
-
-abstract interface class Exportable {
-  Map<String, dynamic> toJson();
-}
-
-//основные классы
-class Book extends LibraryItem
-    with Rateable
-    implements Searchable, Exportable, Comparable<Book> {
-  @override
-  Map<String, dynamic> toJson() => {
-    'title': title,
-    'author': author,
-    'year': year,
-    'pages': pages,
-    'genres': genres.toList(),
-    'status': status.name,
-    'rating': _rating,
-  };
-
-  @override
-  final String title;
-  final String author;
-  final int year;
-  final int pages;
-  final Set<String> genres;
-  ReadingStatus status;
-  double? _rating;
-
-  Book({
-    required this.title,
-    required this.author,
-    this.year = 2024,
-    this.pages = 100,
-    Set<String>? genres,
-    this.status = ReadingStatus.planned,
-    double? rating,
-  }) : genres = genres ?? <String>{} {
-    if (rating != null) {
-      this.rating = rating;
+int? _askInt(String prompt, {int min = 0, int? max}) {
+  while (true) {
+    stdout.write('$prompt: ');
+    final line = _readLine();
+    if (line == null) return null;
+    final value = int.tryParse(line);
+    if (value != null && value >= min && (max == null || value <= max)) {
+      return value;
     }
-  }
-
-  String get shortTitle =>
-      title.length > 25 ? '${title.substring(0, 22)}...' : title;
-  double get readingHours => pages / 50.0;
-  int get age => DateTime.now().year - year;
-  bool get isRated => _rating != null;
-
-  set rating(double value) {
-    if (value < 0 || value > 5) {
-      throw ArgumentError('Оценка должна быть от 0 до 5');
-    }
-    _rating = value;
-  }
-
-  @override
-  String describe() {
-    final ratingStr = isRated ? _rating!.toStringAsFixed(1) : 'нет';
-    return '«$title» — $author ($year г., $pages стр., статус: '
-        '${status.label}, оценка: $ratingStr)';
-  }
-
-  @override
-  bool matches(String query) {
-    final q = query.toLowerCase();
-    return title.toLowerCase().contains(q) ||
-        author.toLowerCase().contains(q) ||
-        genres.any((g) => g.toLowerCase().contains(q));
-  }
-
-  @override
-  String toString() => 'Book(title: $title, author: $author, year: $year)';
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
-    }
-    return other is Book &&
-        other.title == title &&
-        other.author == author &&
-        other.year == year;
-  }
-
-  @override
-  int get hashCode => Object.hash(title, author, year);
-
-  @override
-  int compareTo(Book other) => title.compareTo(other.title);
-
-  Book copyWith({
-    String? title,
-    String? author,
-    int? year,
-    int? pages,
-    Set<String>? genres,
-    ReadingStatus? status,
-    double? rating,
-  }) {
-    return Book(
-      title: title ?? this.title,
-      author: author ?? this.author,
-      year: year ?? this.year,
-      pages: pages ?? this.pages,
-      genres: genres ?? this.genres,
-      status: status ?? this.status,
-      rating: rating ?? _rating,
+    print(
+      'Некорректное значение. Ожидается целое число'
+      '${max == null ? ' не меньше $min' : ' от $min до $max'}.',
     );
   }
 }
 
-class PaperBook extends Book with Rateable, Loggable, Borrowable {
-  final String shelf;
-  PaperBook({
-    required super.title,
-    required super.author,
-    required this.shelf,
-    super.year,
-    super.pages,
-    super.genres,
-    super.status,
-    super.rating,
-  });
-
-  @override
-  String describe() => '${super.describe()} [Бумажная, полка: $shelf]';
+String? _askString(String prompt, {bool allowEmpty = false}) {
+  while (true) {
+    stdout.write('$prompt: ');
+    final line = _readLine();
+    if (line == null) return null;
+    if (line.isNotEmpty || allowEmpty) return line;
+    print('Пустое значение недопустимо.');
+  }
 }
 
-class EBook extends Book {
-  final String format;
-  final double sizeMb;
-  EBook({
-    required super.title,
-    required super.author,
-    required this.format,
-    required this.sizeMb,
-    super.year,
-    super.pages,
-    super.genres,
-    super.status,
-    super.rating,
-  });
-
-  @override
-  String describe() =>
-      '${super.describe()} [Электронная, формат: '
-      '$format, $sizeMb МБ]';
-}
-
-class AudioBook extends Book {
-  final Duration duration;
-  final String narrator;
-  AudioBook({
-    required super.title,
-    required super.author,
-    required this.duration,
-    required this.narrator,
-    super.year,
-  });
-  @override
-  double get readingHours => duration.inMinutes / 60;
-  @override
-  String describe() =>
-      '«$title» — аудиокнига, читает $narrator, '
-      '${duration.inMinutes} мин.';
-}
-
-class Library<T extends LibraryItem> {
-  final List<T> _items = [];
-
-  List<T> get items => List.unmodifiable(_items);
-  int get count => _items.length;
-
-  void add(T item) {
-    if (!_items.contains(item)) {
-      _items.add(item);
-    } else {
-      print('Такая книга уже есть');
+bool? _askBool(String prompt) {
+  while (true) {
+    stdout.write('$prompt (да/нет): ');
+    final line = _readLine();
+    if (line == null) return null;
+    switch (line.toLowerCase()) {
+      case 'да':
+      case 'yes':
+      case 'y':
+        return true;
+      case 'нет':
+      case 'no':
+      case 'n':
+        return false;
     }
-  }
-
-  bool remove(T item) => _items.remove(item);
-
-  T? findByTitle(String title) {
-    try {
-      return _items.firstWhere(
-        (item) => item.title.toLowerCase() == title.toLowerCase(),
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Iterable<T> search(String query) => _items.where(
-    (item) => item is Searchable && (item as Searchable).matches(query),
-  );
-  Iterable<T> where(bool Function(T) test) => _items.where(test);
-
-  Map<String, int> countByGenre() {
-    final Map<String, int> counts = {};
-    for (final item in _items) {
-      if (item is Book) {
-        for (final genre in item.genres) {
-          counts[genre] = (counts[genre] ?? 0) + 1;
-        }
-      }
-    }
-    return counts;
-  }
-}
-
-//миксины
-mixin Rateable {
-  double _sumVotes = 0;
-  int _countVotes = 0;
-
-  double get averageRating => _countVotes == 0 ? 0 : _sumVotes / _countVotes;
-
-  void vote(double value) {
-    if (value >= 0 && value <= 10) {
-      _sumVotes += value;
-      _countVotes++;
-    }
-  }
-}
-
-mixin Loggable {
-  void log(String message) {
-    final now = DateTime.now().toIso8601String();
-    print('[$now] LOG: #=$message');
-  }
-}
-
-mixin Borrowable on Book {
-  DateTime? _dueDate;
-  bool get isBorrowed => _dueDate != null;
-  void borrow(int days) {
-    _dueDate = DateTime.now().add(Duration(days: days));
-    print('Книга "$title" выдана до ${_dueDate.toString().split(' ')[0]}');
-  }
-
-  void giveBack() {
-    if (isBorrowed) {
-      _dueDate = null;
-      print('Книга "$title" возвращена.');
-    }
+    print('Введите "да" или "нет".');
   }
 }
 
@@ -286,9 +61,14 @@ void main() {
   while (running) {
     printMenu();
     stdout.write('> ');
-    final String command = (stdin.readLineSync(encoding: utf8) ?? '').trim();
+    final String? line = _readLine();
 
-    switch (command) {
+    if (line == null) {
+      print('\nВвод завершён.');
+      break;
+    }
+
+    switch (line) {
       case '1':
         _printAll(library.items);
         break;
@@ -329,8 +109,8 @@ void printMenu() {
   print('=' * 44);
   print(' 1 Показать весь каталог');
   print(' 2 Поиск (по названию, автору, жанру)');
-  print(' 3 Фильтр (прочитанные, по жанру)');
-  print(' 4 Сортировка (по названию)');
+  print(' 3 Фильтр (прочитанные, непрочитанные, жанр)');
+  print(' 4 Сортировка (название, автор, год, объём)');
   print(' 5 Статистика каталога');
   print(' 6 Добавить книгу');
   print(' 7 Удалить книгу по номеру');
@@ -441,31 +221,59 @@ void _printAll(List<LibraryItem> items) {
 }
 
 void _searchMenu(Library<Book> lib) {
-  stdout.write('Введите запрос (название, автор или жанр): ');
-  final q = (stdin.readLineSync(encoding: utf8) ?? '').trim();
+  final q = _askString('Запрос (название, автор или жанр)', allowEmpty: true);
+  if (q == null) return _aborted();
   _printAll(lib.search(q).toList());
 }
 
 void _filterMenu(Library<Book> lib) {
-  print('1 - Только прочитанные\n2 - Фильтр по жанру');
-  stdout.write('> ');
-  final choice = (stdin.readLineSync(encoding: utf8) ?? '').trim();
+  print('1 - Только прочитанные');
+  print('2 - Только непрочитанные');
+  print('3 - По жанру');
+  final choice = _askString('Фильтр', allowEmpty: true);
+  if (choice == null) return _aborted();
+
   if (choice == '1') {
     _printAll(lib.where((b) => b.status == ReadingStatus.finished).toList());
   } else if (choice == '2') {
-    stdout.write('Введите жанр: ');
-    final genre = (stdin.readLineSync(encoding: utf8) ?? '')
-        .trim()
-        .toLowerCase();
+    _printAll(lib.where((b) => b.status != ReadingStatus.finished).toList());
+  } else if (choice == '3') {
+    final genre = _askString('Жанр');
+    if (genre == null) return _aborted();
+    final q = genre.toLowerCase();
     _printAll(
-      lib.where((b) => b.genres.any((g) => g.toLowerCase() == genre)).toList(),
+      lib.where((b) => b.genres.any((g) => g.toLowerCase() == q)).toList(),
     );
+  } else {
+    print('Неизвестный фильтр.');
   }
 }
 
 void _sortMenu(Library<Book> lib) {
-  final List<Book> sorted = List.from(lib.items);
-  sorted.sort(); // Благодаря compareTo в классе Book
+  print('Сортировка:');
+  print(' 1 - по названию');
+  print(' 2 - по автору');
+  print(' 3 - по году');
+  print(' 4 - по объёму (страниц)');
+  final field = _askString('Поле', allowEmpty: true);
+  if (field == null) return _aborted();
+
+  final comparators = <String, int Function(Book, Book)>{
+    '1': (a, b) => a.title.compareTo(b.title),
+    '2': (a, b) => a.author.compareTo(b.author),
+    '3': (a, b) => a.year.compareTo(b.year),
+    '4': (a, b) => a.pages.compareTo(b.pages),
+  };
+  final compare = comparators[field];
+  if (compare == null) {
+    print('Неизвестное поле.');
+    return;
+  }
+
+  final desc = _askBool('По убыванию');
+  if (desc == null) return _aborted();
+
+  final sorted = [...lib.items]..sort(desc ? (a, b) => compare(b, a) : compare);
   _printAll(sorted);
 }
 
@@ -483,53 +291,103 @@ void _printStatistics(Library<Book> lib) {
 }
 
 void _addBook(Library<Book> lib) {
-  print('\nВыберите тип книги: 1 - Бумажная, 2 - Электронная, 3 - Аудио');
-  stdout.write('> ');
-  final type = (stdin.readLineSync(encoding: utf8) ?? '').trim();
-  stdout.write('Название: ');
-  final title = (stdin.readLineSync(encoding: utf8) ?? '').trim();
-  stdout.write('Автор: ');
-  final author = (stdin.readLineSync(encoding: utf8) ?? '').trim();
+  print('\n--- Добавление книги ---');
+  print('Тип: 1 - бумажная, 2 - электронная, 3 - аудио');
+  final type = _askInt('Тип', min: 1, max: 3);
+  if (type == null) return _aborted();
+  final title = _askString('Название');
+  if (title == null) return _aborted();
+  final author = _askString('Автор');
+  if (author == null) return _aborted();
+  final year = _askInt('Год издания', min: 1, max: 2100);
+  if (year == null) return _aborted();
+  final pages = _askInt('Количество страниц', min: 1);
+  if (pages == null) return _aborted();
+  final genresInput = _askString('Жанры через запятую');
+  if (genresInput == null) return _aborted();
+  final genres = genresInput
+      .split(',')
+      .map((g) => g.trim())
+      .where((g) => g.isNotEmpty)
+      .toSet();
+  print('Статус: 1 - Запланирована, 2 - Читаю, 3 - Прочитана, 4 - Брошена');
+  final statusNum = _askInt('Статус', min: 1, max: 4);
+  if (statusNum == null) return _aborted();
+  final status = ReadingStatus.values[statusNum - 1];
 
-  if (title.isEmpty || author.isEmpty) {
-    print('Ошибка: пустые поля.');
-    return;
-  }
   try {
-    if (type == '1') {
-      stdout.write('Полка: ');
-      final shelf = (stdin.readLineSync(encoding: utf8) ?? '').trim();
-      lib.add(PaperBook(title: title, author: author, shelf: shelf));
-    } else if (type == '2') {
-      lib.add(EBook(title: title, author: author, format: 'PDF', sizeMb: 5.0));
-    } else if (type == '3') {
-      lib.add(
-        AudioBook(
-          title: title,
-          author: author,
-          duration: Duration(hours: 2),
-          narrator: 'Неизвестен',
-        ),
-      );
-    } else {
-      print('Неверный тип.');
-      return;
+    switch (type) {
+      case 1:
+        final shelf = _askString('Полка');
+        if (shelf == null) return _aborted();
+        lib.add(
+          PaperBook(
+            title: title,
+            author: author,
+            shelf: shelf,
+            year: year,
+            pages: pages,
+            genres: genres,
+            status: status,
+          ),
+        );
+      case 2:
+        final format = _askString('Формат', allowEmpty: true);
+        if (format == null) return _aborted();
+        final sizeMb = _askInt('Размер, МБ', min: 0);
+        if (sizeMb == null) return _aborted();
+        lib.add(
+          EBook(
+            title: title,
+            author: author,
+            format: format.isEmpty ? 'PDF' : format,
+            sizeMb: sizeMb.toDouble(),
+            year: year,
+            pages: pages,
+            genres: genres,
+            status: status,
+          ),
+        );
+      case 3:
+        final narrator = _askString('Читает');
+        if (narrator == null) return _aborted();
+        final hours = _askInt('Длительность, часов', min: 1);
+        if (hours == null) return _aborted();
+        lib.add(
+          AudioBook(
+            title: title,
+            author: author,
+            duration: Duration(hours: hours),
+            narrator: narrator,
+            year: year,
+            pages: pages,
+            genres: genres,
+            status: status,
+          ),
+        );
     }
-    print('Книга добавлена.');
+    print('Книга «$title» добавлена.');
   } catch (e) {
     print('Ошибка: $e');
   }
 }
 
 void _deleteBook(Library<Book> lib) {
+  if (lib.count == 0) {
+    print('Каталог пуст.');
+    return;
+  }
   _printAll(lib.items);
-  stdout.write('Введите номер для удаления: ');
-  final num = int.tryParse((stdin.readLineSync(encoding: utf8) ?? '').trim());
-  if (num != null && num > 0 && num <= lib.count) {
-    final book = lib.items[num - 1];
-    if (lib.remove(book)) print('Книга «${book.title}» удалена.');
+  final num = _askInt('Номер книги для удаления', min: 1, max: lib.count);
+  if (num == null) return _aborted();
+  final book = lib.items[num - 1];
+  final confirm = _askBool('Удалить «${book.title}»');
+  if (confirm == null) return _aborted();
+  if (confirm) {
+    lib.remove(book);
+    print('Книга «${book.title}» удалена.');
   } else {
-    print('Неверный номер.');
+    print('Отменено.');
   }
 }
 
