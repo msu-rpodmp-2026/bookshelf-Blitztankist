@@ -1,5 +1,10 @@
 library;
 
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
 enum ReadingStatus {
   planned('Запланирована', 0),
   reading('Читаю', 1),
@@ -97,6 +102,7 @@ class Book extends LibraryItem
   double get readingHours => pages / 50.0;
   int get age => DateTime.now().year - year;
   bool get isRated => _rating != null;
+  double? get rating => _rating;
 
   set rating(double value) {
     if (value < 0 || value > 5) {
@@ -113,8 +119,18 @@ class Book extends LibraryItem
     'pages': pages,
     'genres': genres.toList(),
     'status': status.name,
-    'rating': _rating,
+    if (_rating != null) 'rating': _rating,
   };
+
+  factory Book.fromJson(Map<String, dynamic> j) => Book(
+    title: j['title'] as String? ?? 'Без названия',
+    author: j['author'] as String? ?? 'Автор неизвестен',
+    year: (j['year'] as num?)?.toInt() ?? 0,
+    pages: (j['pages'] as num?)?.toInt() ?? 0,
+    genres: (j['genres'] as List?)?.cast<String>().toSet() ?? <String>{},
+    status: ReadingStatus.fromName(j['status'] as String? ?? ''),
+    rating: (j['rating'] as num?)?.toDouble(),
+  );
 
   @override
   String describe() {
@@ -221,6 +237,7 @@ class AudioBook extends Book {
     super.pages,
     super.genres,
     super.status,
+    super.rating,
   });
   @override
   double get readingHours => duration.inMinutes / 60;
@@ -268,5 +285,167 @@ class Library<T extends LibraryItem> {
       }
     }
     return counts;
+  }
+}
+
+class LibraryFormatException implements Exception {
+  final String message;
+  final int line;
+  LibraryFormatException(this.message, this.line);
+
+  @override
+  String toString() => 'Ошибка в строке $line: $message';
+}
+
+class LibraryStorage {
+  final String directory;
+  const LibraryStorage(this.directory);
+
+  String get _jsonPath => p.join(directory, 'library.json');
+  String get _csvPath => p.join(directory, 'library.csv');
+
+  Future<List<Book>> load() async {
+    final file = File(_jsonPath);
+    if (!await file.exists()) {
+      return [];
+    }
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is! List) {
+        throw const FormatException('корневой элемент не является массивом');
+      }
+      return data.whereType<Map<String, dynamic>>().map(Book.fromJson).toList();
+    } on FormatException {
+      await file.rename('$_jsonPath.bak');
+      stderr.writeln('Файл каталога повреждён, сохранён как library.json.bak');
+      return [];
+    }
+  }
+
+  Future<void> save(List<Book> books) async {
+    await Directory(directory).create(recursive: true);
+    final json = JsonEncoder.withIndent('  ')
+        .convert(books.map((b) => b.toJson()).toList());
+    final tmp = File('$_jsonPath.tmp');
+    await tmp.writeAsString(json);
+    await tmp.rename(_jsonPath);
+  }
+
+  Future<void> exportCsv(List<Book> books) async {
+    await Directory(directory).create(recursive: true);
+    final lines = <String>['title;author;year;pages;genres;status;rating'];
+    for (final b in books) {
+      lines.add(
+        [
+          _csvField(b.title),
+          _csvField(b.author),
+          b.year.toString(),
+          b.pages.toString(),
+          _csvField(b.genres.join(',')),
+          b.status.name,
+          if (b.rating != null) b.rating.toString(),
+        ].join(';'),
+      );
+    }
+    await File(_csvPath).writeAsString('${lines.join('\n')}\n');
+  }
+
+  Future<List<Book>> importCsv() async {
+    final file = File(_csvPath);
+    if (!await file.exists()) {
+      return [];
+    }
+    final books = <Book>[];
+    var skipped = 0;
+    final lines = await file.readAsLines();
+    for (var i = 1; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.trim().isEmpty) {
+        continue;
+      }
+      try {
+        books.add(_parseCsvLine(line, i + 1));
+      } on LibraryFormatException {
+        skipped++;
+      }
+    }
+    if (skipped > 0) {
+      print('Импорт из CSV: пропущено некорректных строк — $skipped');
+    }
+    return books;
+  }
+
+  Book _parseCsvLine(String line, int lineNo) {
+    final fields = _splitCsvLine(line);
+    if (fields.length < 5) {
+      throw LibraryFormatException(
+        'неверное число полей (${fields.length})',
+        lineNo,
+      );
+    }
+    return Book(
+      title: fields[0].isEmpty ? 'Без названия' : fields[0],
+      author: fields[1],
+      year: int.tryParse(fields[2]) ?? 0,
+      pages: int.tryParse(fields[3]) ?? 0,
+      genres: fields[4]
+          .split(',')
+          .map((g) => g.trim())
+          .where((g) => g.isNotEmpty)
+          .toSet(),
+      status: ReadingStatus.fromName(fields.length > 5 ? fields[5] : ''),
+      rating: fields.length > 6 ? double.tryParse(fields[6]) : null,
+    );
+  }
+
+  List<String> _splitCsvLine(String line) {
+    final fields = <String>[];
+    var buf = StringBuffer();
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      final ch = line[i];
+      if (inQuotes) {
+        if (ch == '"') {
+          if (i + 1 < line.length && line[i + 1] == '"') {
+            buf.write('"');
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          buf.write(ch);
+        }
+      } else if (ch == '"') {
+        inQuotes = true;
+      } else if (ch == ';') {
+        fields.add(buf.toString());
+        buf = StringBuffer();
+      } else {
+        buf.write(ch);
+      }
+    }
+    fields.add(buf.toString());
+    return fields;
+  }
+
+  String _csvField(String value) {
+    if (value.contains(';') || value.contains('"')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
+  Future<bool> backup() async {
+    final source = File(_jsonPath);
+    if (!await source.exists()) {
+      return false;
+    }
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final stamp =
+        '${now.year}${two(now.month)}${two(now.day)}'
+        '_${two(now.hour)}${two(now.minute)}${two(now.second)}';
+    await source.copy(p.join(directory, 'library_$stamp.json'));
+    return true;
   }
 }
