@@ -123,13 +123,17 @@ class Book extends LibraryItem
   };
 
   factory Book.fromJson(Map<String, dynamic> j) => Book(
-    title: j['title'] as String? ?? 'Без названия',
-    author: j['author'] as String? ?? 'Автор неизвестен',
-    year: (j['year'] as num?)?.toInt() ?? 0,
-    pages: (j['pages'] as num?)?.toInt() ?? 0,
-    genres: (j['genres'] as List?)?.cast<String>().toSet() ?? <String>{},
-    status: ReadingStatus.fromName(j['status'] as String? ?? ''),
-    rating: (j['rating'] as num?)?.toDouble(),
+    title: j['title'] is String ? j['title'] as String : 'Без названия',
+    author: j['author'] is String ? j['author'] as String : 'Автор неизвестен',
+    year: j['year'] is num ? (j['year'] as num).toInt() : 0,
+    pages: j['pages'] is num ? (j['pages'] as num).toInt() : 0,
+    genres: j['genres'] is List
+        ? (j['genres'] as List).whereType<String>().toSet()
+        : <String>{},
+    status: ReadingStatus.fromName(
+      j['status'] is String ? j['status'] as String : '',
+    ),
+    rating: j['rating'] is num ? (j['rating'] as num).toDouble() : null,
   );
 
   @override
@@ -306,9 +310,6 @@ class LibraryStorage {
 
   Future<List<Book>> load() async {
     final file = File(_jsonPath);
-    if (!await file.exists()) {
-      return [];
-    }
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! List) {

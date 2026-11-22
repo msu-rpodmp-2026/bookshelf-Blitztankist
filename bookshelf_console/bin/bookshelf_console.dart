@@ -78,8 +78,10 @@ Future<Library<Book>> _loadLibrary(LibraryStorage storage) async {
   try {
     books = await storage.load();
   } on PathNotFoundException {
-    print('Файл каталога не найден — создан новый пустой каталог.');
-    books = [];
+    print('Файл каталога не найден — создан новый каталог с демо-данными.');
+    _seedData(library);
+    await storage.save(library.items);
+    return library;
   } on FormatException catch (e) {
     print('Файл повреждён: ${e.message}');
     books = [];
@@ -92,14 +94,8 @@ Future<Library<Book>> _loadLibrary(LibraryStorage storage) async {
   } finally {
     print('Загрузка завершена.');
   }
-  if (books.isEmpty) {
-    print('Каталог пуст — создан новый и заполнен демо-данными.');
-    _seedData(library);
-    await storage.save(library.items);
-  } else {
-    for (final book in books) {
-      library.add(book);
-    }
+  for (final book in books) {
+    library.add(book);
   }
   return library;
 }
