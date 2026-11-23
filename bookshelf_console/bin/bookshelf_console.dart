@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bookshelf_console/models/models.dart';
+import 'package:path/path.dart' as p;
 
 String? _readLine() => stdin.readLineSync(encoding: utf8)?.trim();
 
@@ -23,11 +24,20 @@ int? _askInt(String prompt, {int min = 0, int? max}) {
   }
 }
 
-String? _askString(String prompt, {bool allowEmpty = false}) {
+String? _askString(
+  String prompt, {
+  bool allowEmpty = false,
+  bool requireLetters = false,
+}) {
+  final letters = RegExp('[A-Za-zА-Яа-яЁё]');
   while (true) {
     stdout.write('$prompt: ');
     final line = _readLine();
     if (line == null) return null;
+    if (requireLetters && !letters.hasMatch(line)) {
+      print('Ожидается имя, а не число — повторите ввод.');
+      continue;
+    }
     if (line.isNotEmpty || allowEmpty) return line;
     print('Пустое значение недопустимо.');
   }
@@ -52,10 +62,50 @@ bool? _askBool(String prompt) {
   }
 }
 
-void main() {
+void _demoPathFunctions() {
+  final path = p.join('data', 'library.json');
+  print('\n--- Пакет path: сборка и разбор путей ---');
+  print('p.join("data", "library.json") = $path');
+  print('p.basename = ${p.basename(path)}');
+  print('p.extension = ${p.extension(path)}');
+  print('p.dirname = ${p.dirname(path)}');
+  print('p.absolute = ${p.absolute(path)}');
+}
+
+Future<Library<Book>> _loadLibrary(LibraryStorage storage) async {
+  final library = Library<Book>();
+  List<Book> books;
+  try {
+    books = await storage.load();
+  } on PathNotFoundException {
+    print('Файл каталога не найден — создан новый каталог с демо-данными.');
+    _seedData(library);
+    await storage.save(library.items);
+    return library;
+  } on FormatException catch (e) {
+    print('Файл повреждён: ${e.message}');
+    books = [];
+  } on FileSystemException catch (e) {
+    print(
+      'Ошибка файловой системы: ${e.message} '
+      '(код ${e.osError?.errorCode})',
+    );
+    rethrow;
+  } finally {
+    print('Загрузка завершена.');
+  }
+  for (final book in books) {
+    library.add(book);
+  }
+  return library;
+}
+
+Future<void> main() async {
   stdout.encoding = utf8;
-  final Library<Book> library = Library<Book>();
-  _seedData(library);
+  const storage = LibraryStorage('data');
+
+  _demoPathFunctions();
+  final Library<Book> library = await _loadLibrary(storage);
 
   bool running = true;
   while (running) {
@@ -86,12 +136,33 @@ void main() {
         break;
       case '6':
         _addBook(library);
+        await storage.save(library.items);
         break;
       case '7':
         _deleteBook(library);
+        await storage.save(library.items);
         break;
       case '8':
         _demoSpecialMethods();
+        break;
+      case '9':
+        await storage.exportCsv(library.items);
+        print('Каталог выгружен в ${p.join('data', 'library.csv')}');
+        break;
+      case '10':
+        final imported = await storage.importCsv();
+        for (final book in imported) {
+          library.add(book);
+        }
+        print('Импортировано книг: ${imported.length}');
+        break;
+      case '11':
+        final ok = await storage.backup();
+        if (ok) {
+          print('Резервная копия создана в каталоге data/');
+        } else {
+          print('Нечего копировать — файл каталога ещё не создан.');
+        }
         break;
       case '0':
         running = false;
@@ -100,7 +171,8 @@ void main() {
         print('Неизвестная команда. Повторите ввод.');
     }
   }
-  print('Работа завершена.');
+  await storage.save(library.items);
+  print('Работа завершена. Сохранено записей: ${library.count}');
 }
 
 void printMenu() {
@@ -115,6 +187,9 @@ void printMenu() {
   print(' 6 Добавить книгу');
   print(' 7 Удалить книгу по номеру');
   print(' 8 Демонстрация ==, hashCode, Set');
+  print(' 9 Экспорт в CSV');
+  print('10 Импорт из CSV');
+  print('11 Резервная копия');
   print(' 0 Выход');
   print('=' * 44);
 }
@@ -297,7 +372,7 @@ void _addBook(Library<Book> lib) {
   if (type == null) return _aborted();
   final title = _askString('Название');
   if (title == null) return _aborted();
-  final author = _askString('Автор');
+  final author = _askString('Автор', requireLetters: true);
   if (author == null) return _aborted();
   final year = _askInt('Год издания', min: 1, max: 2100);
   if (year == null) return _aborted();
@@ -315,6 +390,24 @@ void _addBook(Library<Book> lib) {
   if (statusNum == null) return _aborted();
   final status = ReadingStatus.values[statusNum - 1];
 
+  double? rating;
+  if (status == ReadingStatus.finished) {
+    while (true) {
+      final line = _askString(
+        'Оценка 0-5 (Enter — без оценки)',
+        allowEmpty: true,
+      );
+      if (line == null) return _aborted();
+      if (line.isEmpty) break;
+      final value = double.tryParse(line.replaceAll(',', '.'));
+      if (value != null && value >= 0 && value <= 5) {
+        rating = value;
+        break;
+      }
+      print('Ожидается число от 0 до 5.');
+    }
+  }
+
   try {
     switch (type) {
       case 1:
@@ -329,6 +422,7 @@ void _addBook(Library<Book> lib) {
             pages: pages,
             genres: genres,
             status: status,
+            rating: rating,
           ),
         );
       case 2:
@@ -346,10 +440,11 @@ void _addBook(Library<Book> lib) {
             pages: pages,
             genres: genres,
             status: status,
+            rating: rating,
           ),
         );
       case 3:
-        final narrator = _askString('Читает');
+        final narrator = _askString('Читает', requireLetters: true);
         if (narrator == null) return _aborted();
         final hours = _askInt('Длительность, часов', min: 1);
         if (hours == null) return _aborted();
@@ -363,6 +458,7 @@ void _addBook(Library<Book> lib) {
             pages: pages,
             genres: genres,
             status: status,
+            rating: rating,
           ),
         );
     }
