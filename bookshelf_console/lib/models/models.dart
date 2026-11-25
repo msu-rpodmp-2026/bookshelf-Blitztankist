@@ -80,6 +80,7 @@ class Book extends LibraryItem
   final int year;
   final int pages;
   final Set<String> genres;
+  final String? coverUrl;
   ReadingStatus status;
   double? _rating;
 
@@ -89,6 +90,7 @@ class Book extends LibraryItem
     this.year = 2024,
     this.pages = 100,
     Set<String>? genres,
+    this.coverUrl,
     this.status = ReadingStatus.planned,
     double? rating,
   }) : genres = genres ?? <String>{} {
@@ -120,6 +122,7 @@ class Book extends LibraryItem
     'genres': genres.toList(),
     'status': status.name,
     if (_rating != null) 'rating': _rating,
+    if (coverUrl != null) 'coverUrl': coverUrl,
   };
 
   factory Book.fromJson(Map<String, dynamic> j) => Book(
@@ -134,6 +137,7 @@ class Book extends LibraryItem
       j['status'] is String ? j['status'] as String : '',
     ),
     rating: j['rating'] is num ? (j['rating'] as num).toDouble() : null,
+    coverUrl: j['coverUrl'] is String ? j['coverUrl'] as String : null,
   );
 
   @override
@@ -177,6 +181,7 @@ class Book extends LibraryItem
     int? year,
     int? pages,
     Set<String>? genres,
+    String? coverUrl,
     ReadingStatus? status,
     double? rating,
   }) {
@@ -186,6 +191,7 @@ class Book extends LibraryItem
       year: year ?? this.year,
       pages: pages ?? this.pages,
       genres: genres ?? this.genres,
+      coverUrl: coverUrl ?? this.coverUrl,
       status: status ?? this.status,
       rating: rating ?? _rating,
     );

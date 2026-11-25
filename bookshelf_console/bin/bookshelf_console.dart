@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:bookshelf_console/models/models.dart';
+import 'package:bookshelf_console/services/open_library_service.dart';
 import 'package:path/path.dart' as p;
 
 String? _readLine() => stdin.readLineSync(encoding: utf8)?.trim();
@@ -62,23 +64,12 @@ bool? _askBool(String prompt) {
   }
 }
 
-void _demoPathFunctions() {
-  final path = p.join('data', 'library.json');
-  print('\n--- Пакет path: сборка и разбор путей ---');
-  print('p.join("data", "library.json") = $path');
-  print('p.basename = ${p.basename(path)}');
-  print('p.extension = ${p.extension(path)}');
-  print('p.dirname = ${p.dirname(path)}');
-  print('p.absolute = ${p.absolute(path)}');
-}
-
 Future<Library<Book>> _loadLibrary(LibraryStorage storage) async {
   final library = Library<Book>();
   List<Book> books;
   try {
     books = await storage.load();
   } on PathNotFoundException {
-    print('Файл каталога не найден — создан новый каталог с демо-данными.');
     _seedData(library);
     await storage.save(library.items);
     return library;
@@ -91,8 +82,6 @@ Future<Library<Book>> _loadLibrary(LibraryStorage storage) async {
       '(код ${e.osError?.errorCode})',
     );
     rethrow;
-  } finally {
-    print('Загрузка завершена.');
   }
   for (final book in books) {
     library.add(book);
@@ -104,7 +93,6 @@ Future<void> main() async {
   stdout.encoding = utf8;
   const storage = LibraryStorage('data');
 
-  _demoPathFunctions();
   final Library<Book> library = await _loadLibrary(storage);
 
   bool running = true;
@@ -143,26 +131,26 @@ Future<void> main() async {
         await storage.save(library.items);
         break;
       case '8':
-        _demoSpecialMethods();
-        break;
-      case '9':
         await storage.exportCsv(library.items);
         print('Каталог выгружен в ${p.join('data', 'library.csv')}');
         break;
-      case '10':
+      case '9':
         final imported = await storage.importCsv();
         for (final book in imported) {
           library.add(book);
         }
         print('Импортировано книг: ${imported.length}');
         break;
-      case '11':
+      case '10':
         final ok = await storage.backup();
         if (ok) {
           print('Резервная копия создана в каталоге data/');
         } else {
           print('Нечего копировать — файл каталога ещё не создан.');
         }
+        break;
+      case '11':
+        await _searchOpenLibrary(library, storage);
         break;
       case '0':
         running = false;
@@ -186,10 +174,10 @@ void printMenu() {
   print(' 5 Статистика каталога');
   print(' 6 Добавить книгу');
   print(' 7 Удалить книгу по номеру');
-  print(' 8 Демонстрация ==, hashCode, Set');
-  print(' 9 Экспорт в CSV');
-  print('10 Импорт из CSV');
-  print('11 Резервная копия');
+  print(' 8 Экспорт в CSV');
+  print(' 9 Импорт из CSV');
+  print('10 Резервная копия');
+  print('11 Поиск в Open Library');
   print(' 0 Выход');
   print('=' * 44);
 }
@@ -487,11 +475,61 @@ void _deleteBook(Library<Book> lib) {
   }
 }
 
-void _demoSpecialMethods() {
-  print('\n--- Демонстрация ==, hashCode и Set ---');
-  final b1 = Book(title: 'Война и мир', author: 'Л. Толстой', year: 1869);
-  final b2 = Book(title: 'Война и мир', author: 'Л. Толстой', year: 1869);
-  print('b1 == b2: ${b1 == b2}');
-  final Set<Book> bookSet = {b1, b2};
-  print('Размер Set с двумя одинаковыми книгами: ${bookSet.length}');
+Future<void> _searchOpenLibrary(
+  Library<Book> lib,
+  LibraryStorage storage,
+) async {
+  final query = _askString('Запрос для Open Library');
+  if (query == null) return _aborted();
+
+  final service = OpenLibraryService();
+  final dots = Timer.periodic(
+    const Duration(milliseconds: 400),
+    (_) => stdout.write('.'),
+  );
+
+  List<Book> found;
+  try {
+    found = await service.search(query, limit: 10);
+  } on SocketException {
+    print('\nНет соединения с сетью. Работаем с локальным каталогом.');
+    return;
+  } on TimeoutException {
+    print('\nСервис не ответил за 10 секунд. Повторите попытку позже.');
+    return;
+  } on FormatException {
+    print('\nСервис вернул данные в неожиданном формате.');
+    return;
+  } on HttpException catch (e) {
+    print('\nОшибка сервиса: ${e.message}');
+    return;
+  } finally {
+    dots.cancel();
+    service.dispose();
+    print('');
+  }
+
+  if (found.isEmpty) {
+    print('По запросу «$query» ничего не найдено.');
+    return;
+  }
+  print('Найдено книг: ${found.length}');
+  for (var i = 0; i < found.length; i++) {
+    final b = found[i];
+    print(
+      '${(i + 1).toString().padLeft(2)}. «${b.title}» — ${b.author}, '
+      '${b.year} г., ${b.pages} стр.',
+    );
+  }
+
+  final choice = _askInt('Номер книги для добавления (0 — отмена)', min: 0);
+  if (choice == null) return _aborted();
+  if (choice == 0) {
+    print('Отменено.');
+    return;
+  }
+  final book = found[choice - 1];
+  lib.add(book);
+  await storage.save(lib.items);
+  print('Книга «${book.title}» добавлена в каталог и сохранена.');
 }
