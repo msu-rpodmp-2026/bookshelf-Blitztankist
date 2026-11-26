@@ -522,7 +522,11 @@ Future<void> _searchOpenLibrary(
     );
   }
 
-  final choice = _askInt('Номер книги для добавления (0 — отмена)', min: 0);
+  final choice = _askInt(
+    'Номер книги для добавления (0 — отмена)',
+    min: 0,
+    max: found.length,
+  );
   if (choice == null) return _aborted();
   if (choice == 0) {
     print('Отменено.');
